@@ -1,0 +1,467 @@
+-- [[ TAB-BASED CATEGORIZED HUB WITH DROPDOWN PLAYER TELEPORT ]] --
+
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local Lighting = game:GetService("Lighting")
+local LocalPlayer = Players.LocalPlayer
+
+-- ลบ UI เก่าหากเคยเปิดไว้
+if CoreGui:FindFirstChild("TabbedUI") then CoreGui.TabbedUI:Destroy() end
+
+-- ตั้งค่าเริ่มต้น
+local Config = {
+    Hitbox = false,
+    HitboxSize = 10,
+    ESP = false,
+    WalkSpeed = 16,
+    JumpPower = 50,
+    Noclip = false,
+    Korblox = false,
+    AutoGrabEggs = false,
+    SelectedTargetPlayer = nil
+}
+
+-- สร้าง ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TabbedUI"
+ScreenGui.Parent = CoreGui
+ScreenGui.ResetOnSpawn = false
+
+-- หน้าต่างหลัก (Main Frame)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Position = UDim2.new(0.5, -175, 0.2, 0)
+MainFrame.Size = UDim2.new(0, 350, 0, 420)
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+local UICorner = Instance.new("UICorner", MainFrame)
+UICorner.CornerRadius = UDim.new(0, 8)
+
+-- แสดงรูปภาพส่วนหัว UI (Image Header)
+local HeaderImage = Instance.new("ImageLabel")
+HeaderImage.Name = "HeaderImage"
+HeaderImage.Parent = MainFrame
+HeaderImage.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+HeaderImage.BorderSizePixel = 0
+HeaderImage.Position = UDim2.new(0, 10, 0, 10)
+HeaderImage.Size = UDim2.new(1, -20, 0, 70)
+HeaderImage.ScaleType = Enum.ScaleType.Crop
+HeaderImage.Image = "rbxassetid://YOUR_IMAGE_ID_HERE" -- ใส่ Asset ID รูปของคุณตรงนี้
+
+local ImageCorner = Instance.new("UICorner", HeaderImage)
+ImageCorner.CornerRadius = UDim.new(0, 6)
+
+-- หัวข้อหลัก
+local Title = Instance.new("TextLabel")
+Title.Parent = MainFrame
+Title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+Title.Position = UDim2.new(0, 0, 0, 85)
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.Font = Enum.Font.SourceSansBold
+Title.Text = "⚡ MULTI HUB (CATEGORIZED)"
+Title.TextColor3 = Color3.fromRGB(0, 255, 200)
+Title.TextSize = 13
+
+-- แถบเลือกหมวดหมู่ (Tab Container ด้านซ้าย)
+local TabBar = Instance.new("Frame")
+TabBar.Parent = MainFrame
+TabBar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+TabBar.Position = UDim2.new(0, 10, 0, 115)
+TabBar.Size = UDim2.new(0, 95, 1, -125)
+
+local TabBarCorner = Instance.new("UICorner", TabBar)
+TabBarCorner.CornerRadius = UDim.new(0, 6)
+
+local TabList = Instance.new("UIListLayout")
+TabList.Parent = TabBar
+TabList.SortOrder = Enum.SortOrder.LayoutOrder
+TabList.Padding = UDim.new(0, 4)
+
+-- พื้นที่แสดงเนื้อหา (Content Container ด้านขวา)
+local ContentHolder = Instance.new("Frame")
+ContentHolder.Parent = MainFrame
+ContentHolder.BackgroundTransparency = 1
+ContentHolder.Position = UDim2.new(0, 110, 0, 115)
+ContentHolder.Size = UDim2.new(1, -120, 1, -125)
+
+local Tabs = {}
+local ActiveTabBtn = nil
+
+-- ฟังก์ชันสร้าง Tab
+local function CreateTab(tabName, isDefault)
+    local tabBtn = Instance.new("TextButton")
+    tabBtn.Parent = TabBar
+    tabBtn.BackgroundColor3 = isDefault and Color3.fromRGB(0, 170, 255) or Color3.fromRGB(35, 35, 35)
+    tabBtn.BorderSizePixel = 0
+    tabBtn.Size = UDim2.new(1, 0, 0, 32)
+    tabBtn.Font = Enum.Font.SourceSansBold
+    tabBtn.Text = tabName
+    tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tabBtn.TextSize = 12
+
+    local tabBtnCorner = Instance.new("UICorner", tabBtn)
+    tabBtnCorner.CornerRadius = UDim.new(0, 5)
+
+    local page = Instance.new("ScrollingFrame")
+    page.Parent = ContentHolder
+    page.BackgroundTransparency = 1
+    page.Size = UDim2.new(1, 0, 1, 0)
+    page.CanvasSize = UDim2.new(0, 0, 0, 0)
+    page.ScrollBarThickness = 3
+    page.Visible = isDefault
+
+    local pageLayout = Instance.new("UIListLayout")
+    pageLayout.Parent = page
+    pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    pageLayout.Padding = UDim.new(0, 5)
+
+    pageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        page.CanvasSize = UDim2.new(0, 0, 0, pageLayout.AbsoluteContentSize.Y + 10)
+    end)
+
+    if isDefault then ActiveTabBtn = tabBtn end
+
+    tabBtn.MouseButton1Click:Connect(function()
+        for _, t in pairs(Tabs) do
+            t.Page.Visible = false
+            t.Button.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        end
+        page.Visible = true
+        tabBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    end)
+
+    local tabData = {Page = page, Button = tabBtn}
+    table.insert(Tabs, tabData)
+    return page
+end
+
+-- ฟังก์ชันสร้างปุ่มในแต่ละ Tab
+local function CreateButton(parentPage, text, callback)
+    local btn = Instance.new("TextButton")
+    btn.Parent = parentPage
+    btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    btn.BorderSizePixel = 0
+    btn.Size = UDim2.new(1, 0, 0, 28)
+    btn.Font = Enum.Font.SourceSansSemibold
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 12
+
+    local corner = Instance.new("UICorner", btn)
+    corner.CornerRadius = UDim.new(0, 5)
+
+    btn.MouseButton1Click:Connect(function() callback(btn) end)
+    return btn
+end
+
+-- ฟังก์ชัน Korblox
+local function ApplyKorblox(char)
+    if not char then return end
+    local rightLowerLeg = char:FindFirstChild("RightLowerLeg")
+    local rightUpperLeg = char:FindFirstChild("RightUpperLeg")
+    local rightFoot = char:FindFirstChild("RightFoot")
+    
+    if rightLowerLeg and rightUpperLeg and rightFoot then
+        rightLowerLeg.MeshId = "rbxassetid://902942093"
+        rightLowerLeg.Transparency = 0
+        rightUpperLeg.MeshId = "rbxassetid://902942096"
+        rightUpperLeg.TextureID = "rbxassetid://902843398"
+        rightFoot.MeshId = "rbxassetid://902942089"
+        rightFoot.Transparency = 1
+    end
+    
+    local rightLeg = char:FindFirstChild("Right Leg")
+    if rightLeg and not rightLowerLeg then rightLeg.Transparency = 1 end
+end
+
+-- ====================================================
+-- 📌 สร้าง TABS ทั้งหมด
+-- ====================================================
+local VisualsTab = CreateTab("🚀 Visuals", true)
+local CombatTab  = CreateTab("⚔️ Combat", false)
+local TeleportTab = CreateTab("👥 Teleport", false)
+local MapTab     = CreateTab("🗺️ Map Tools", false)
+
+-- ----------------------------------------------------
+-- 1️⃣ TAB : VISUALS
+-- ----------------------------------------------------
+CreateButton(VisualsTab, "🚀 Boost FPS & Reduce Ping", function(btn)
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 9e9
+    settings().Rendering.QualityLevel = 1
+    for _, obj in pairs(game:GetDescendants()) do
+        if obj:IsA("BasePart") then obj.Material = Enum.Material.SmoothPlastic obj.Reflectance = 0
+        elseif obj:IsA("Decal") or obj:IsA("Texture") then obj:Destroy()
+        elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then obj.Enabled = false end
+    end
+    btn.Text = "✅ Boost FPS สำเร็จ!"
+    btn.BackgroundColor3 = Color3.fromRGB(0, 180, 90)
+end)
+
+CreateButton(VisualsTab, "🦵 Korblox Leg : [ OFF ]", function(btn)
+    Config.Korblox = not Config.Korblox
+    if Config.Korblox then
+        btn.Text = "🦵 Korblox Leg : [ ON ]"
+        btn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+        if LocalPlayer.Character then ApplyKorblox(LocalPlayer.Character) end
+    else
+        btn.Text = "🦵 Korblox Leg : [ OFF ]"
+        btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.Health = 0
+        end
+    end
+end)
+
+CreateButton(VisualsTab, "👁️ ESP มองทะลุ : [ OFF ]", function(btn)
+    Config.ESP = not Config.ESP
+    btn.Text = Config.ESP and "👁️ ESP มองทะลุ : [ ON ]" or "👁️ ESP มองทะลุ : [ OFF ]"
+    btn.BackgroundColor3 = Config.ESP and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(45, 45, 45)
+end)
+
+-- ----------------------------------------------------
+-- 2️⃣ TAB : COMBAT
+-- ----------------------------------------------------
+CreateButton(CombatTab, "📦 Hitbox : [ OFF ]", function(btn)
+    Config.Hitbox = not Config.Hitbox
+    btn.Text = Config.Hitbox and "📦 Hitbox : [ ON ]" or "📦 Hitbox : [ OFF ]"
+    btn.BackgroundColor3 = Config.Hitbox and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(45, 45, 45)
+end)
+
+local SizeLabel = Instance.new("TextLabel")
+SizeLabel.Parent = CombatTab
+SizeLabel.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+SizeLabel.BorderSizePixel = 0
+SizeLabel.Size = UDim2.new(1, 0, 0, 24)
+SizeLabel.Font = Enum.Font.SourceSansBold
+SizeLabel.Text = "ขนาด Hitbox : " .. tostring(Config.HitboxSize)
+SizeLabel.TextColor3 = Color3.fromRGB(0, 243, 255)
+SizeLabel.TextSize = 12
+
+local LabelCorner = Instance.new("UICorner", SizeLabel)
+LabelCorner.CornerRadius = UDim.new(0, 5)
+
+CreateButton(CombatTab, "➕ เพิ่มขนาด Hitbox (+2)", function()
+    if Config.HitboxSize < 50 then
+        Config.HitboxSize = Config.HitboxSize + 2
+        SizeLabel.Text = "ขนาด Hitbox : " .. tostring(Config.HitboxSize)
+    end
+end)
+
+CreateButton(CombatTab, "➖ ลดขนาด Hitbox (-2)", function()
+    if Config.HitboxSize > 2 then
+        Config.HitboxSize = Config.HitboxSize - 2
+        SizeLabel.Text = "ขนาด Hitbox : " .. tostring(Config.HitboxSize)
+    end
+end)
+
+CreateButton(CombatTab, "⚡ ความเร็วเดิน : 16", function(btn)
+    Config.WalkSpeed = Config.WalkSpeed + 25
+    if Config.WalkSpeed > 150 then Config.WalkSpeed = 16 end
+    btn.Text = "⚡ ความเร็วเดิน : " .. tostring(Config.WalkSpeed)
+end)
+
+CreateButton(CombatTab, "👻 ทะลุกำแพง : [ OFF ]", function(btn)
+    Config.Noclip = not Config.Noclip
+    btn.Text = Config.Noclip and "👻 ทะลุกำแพง : [ ON ]" or "👻 ทะลุกำแพง : [ OFF ]"
+    btn.BackgroundColor3 = Config.Noclip and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(45, 45, 45)
+end)
+
+-- ----------------------------------------------------
+-- 3️⃣ TAB : TELEPORT TO PLAYERS (DROPDOWN)
+-- ----------------------------------------------------
+local DropdownFrame = Instance.new("Frame")
+DropdownFrame.Parent = TeleportTab
+DropdownFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+DropdownFrame.BorderSizePixel = 0
+DropdownFrame.Size = UDim2.new(1, 0, 0, 28)
+DropdownFrame.ClipsDescendants = true
+
+local DropdownCorner = Instance.new("UICorner", DropdownFrame)
+DropdownCorner.CornerRadius = UDim.new(0, 5)
+
+local DropdownBtn = Instance.new("TextButton")
+DropdownBtn.Parent = DropdownFrame
+DropdownBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+DropdownBtn.BorderSizePixel = 0
+DropdownBtn.Size = UDim2.new(1, 0, 0, 28)
+DropdownBtn.Font = Enum.Font.SourceSansSemibold
+DropdownBtn.Text = "🔽 เลือกผู้เล่น..."
+DropdownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+DropdownBtn.TextSize = 12
+
+local DropCorner = Instance.new("UICorner", DropdownBtn)
+DropCorner.CornerRadius = UDim.new(0, 5)
+
+local ListHolder = Instance.new("Frame")
+ListHolder.Parent = DropdownFrame
+ListHolder.BackgroundTransparency = 1
+ListHolder.Position = UDim2.new(0, 0, 0, 30)
+ListHolder.Size = UDim2.new(1, 0, 0, 0)
+
+local ListLayout = Instance.new("UIListLayout")
+ListLayout.Parent = ListHolder
+ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ListLayout.Padding = UDim.new(0, 2)
+
+local isDropdownOpen = false
+
+local function RefreshPlayerDropdown()
+    for _, child in pairs(ListHolder:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    
+    local count = 0
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            count = count + 1
+            local pBtn = Instance.new("TextButton")
+            pBtn.Parent = ListHolder
+            pBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+            pBtn.BorderSizePixel = 0
+            pBtn.Size = UDim2.new(1, 0, 0, 25)
+            pBtn.Font = Enum.Font.SourceSans
+            pBtn.Text = "👤 " .. plr.DisplayName
+            pBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+            pBtn.TextSize = 12
+            
+            local pCorner = Instance.new("UICorner", pBtn)
+            pCorner.CornerRadius = UDim.new(0, 4)
+            
+            pBtn.MouseButton1Click:Connect(function()
+                Config.SelectedTargetPlayer = plr
+                DropdownBtn.Text = "👤 เลือกอยู่: " .. plr.DisplayName
+                isDropdownOpen = false
+                DropdownFrame.Size = UDim2.new(1, 0, 0, 28)
+            end)
+        end
+    end
+    ListHolder.Size = UDim2.new(1, 0, 0, count * 27)
+end
+
+DropdownBtn.MouseButton1Click:Connect(function()
+    isDropdownOpen = not isDropdownOpen
+    if isDropdownOpen then
+        RefreshPlayerDropdown()
+        local totalHeight = 30 + ListHolder.Size.Y.Offset
+        DropdownFrame.Size = UDim2.new(1, 0, 0, totalHeight)
+    else
+        DropdownFrame.Size = UDim2.new(1, 0, 0, 28)
+    end
+end)
+
+CreateButton(TeleportTab, "🔄 รีเฟรชรายชื่อผู้เล่น", function()
+    RefreshPlayerDropdown()
+end)
+
+CreateButton(TeleportTab, "🌀 วาร์ปไปหาผู้เล่นที่เลือก", function()
+    if Config.SelectedTargetPlayer and Config.SelectedTargetPlayer.Character then
+        local targetRoot = Config.SelectedTargetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        
+        if targetRoot and myRoot then
+            myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, -3)
+        end
+    end
+end)
+
+-- ----------------------------------------------------
+-- 4️⃣ TAB : MAP TOOLS
+-- ----------------------------------------------------
+CreateButton(MapTab, "🥚 Auto Grab Eggs (แมพไข่)", function(btn)
+    Config.AutoGrabEggs = not Config.AutoGrabEggs
+    btn.Text = Config.AutoGrabEggs and "🥚 Auto Grab : [ ON ]" or "🥚 Auto Grab : [ OFF ]"
+    btn.BackgroundColor3 = Config.AutoGrabEggs and Color3.fromRGB(0, 180, 90) or Color3.fromRGB(45, 45, 45)
+end)
+
+CreateButton(MapTab, "🏦 วาร์ปไปตู้เซฟ (Brookhaven)", function()
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(-22, 23, -286)
+    end
+end)
+
+CreateButton(MapTab, "🚔 วาร์ปไปสถานีตำรวจ (Brookhaven)", function()
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(-143, 22, -158)
+    end
+end)
+
+-- ปุ่มลอย เปิด/ปิด UI
+local FloatBtn = Instance.new("TextButton")
+FloatBtn.Parent = ScreenGui
+FloatBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+FloatBtn.Position = UDim2.new(0, 15, 0.4, 0)
+FloatBtn.Size = UDim2.new(0, 65, 0, 32)
+FloatBtn.Font = Enum.Font.SourceSansBold
+FloatBtn.Text = "MENU"
+FloatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+FloatBtn.TextSize = 13
+FloatBtn.Draggable = true
+FloatBtn.Active = true
+
+local FloatCorner = Instance.new("UICorner", FloatBtn)
+FloatCorner.CornerRadius = UDim.new(0, 8)
+
+FloatBtn.MouseButton1Click:Connect(function() MainFrame.Visible = not MainFrame.Visible end)
+
+-- Loop ระบบทำงานเบื้องหลัง
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    if Config.Korblox then ApplyKorblox(char) end
+end)
+
+task.spawn(function()
+    while task.wait(0.2) do
+        pcall(function()
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChildOfClass("Humanoid") then
+                char:FindFirstChildOfClass("Humanoid").WalkSpeed = Config.WalkSpeed
+                if Config.Noclip then
+                    for _, part in pairs(char:GetDescendants()) do
+                        if part:IsA("BasePart") then part.CanCollide = false end
+                    end
+                end
+            end
+
+            if Config.AutoGrabEggs and char and char:FindFirstChild("HumanoidRootPart") then
+                for _, item in pairs(workspace:GetDescendants()) do
+                    if string.find(item.Name:lower(), "egg") then
+                        if item:IsA("BasePart") and (item.Position - char.HumanoidRootPart.Position).Magnitude < 30 then
+                            firetouchinterest(char.HumanoidRootPart, item, 0)
+                            firetouchinterest(char.HumanoidRootPart, item, 1)
+                        elseif item:IsA("ProximityPrompt") then
+                            fireproximityprompt(item)
+                        end
+                    end
+                end
+            end
+
+            for _, plr in pairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and plr.Character then
+                    local pChar = plr.Character
+                    local highlight = pChar:FindFirstChild("Simple_ESP")
+                    if Config.ESP then
+                        if not highlight then
+                            highlight = Instance.new("Highlight", pChar)
+                            highlight.Name = "Simple_ESP"
+                        end
+                        highlight.FillColor = Color3.fromRGB(0, 255, 150)
+                    else
+                        if highlight then highlight:Destroy() end
+                    end
+
+                    local head = pChar:FindFirstChild("Head")
+                    if Config.Hitbox and head then
+                        head.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
+                        head.Transparency = 0.5
+                        head.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+end)
